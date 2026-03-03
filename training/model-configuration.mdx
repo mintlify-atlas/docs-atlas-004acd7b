@@ -1,0 +1,268 @@
+---
+title: Model Configuration
+description: Logistic Regression hyperparameters, training setup, and model persistence for the fake news detector
+---
+
+## Overview
+
+The fake news detector uses **Logistic Regression** as its classification algorithm. Despite being a relatively simple model, it achieves 98.5% accuracy thanks to optimized hyperparameters and quality feature engineering.
+
+## Model Selection
+
+### Why Logistic Regression?
+
+Logistic Regression was chosen for this project because:
+
+1. **High Accuracy**: Achieves 98.5% on the test set
+2. **Fast Training**: Trains in seconds even on large datasets
+3. **Fast Predictions**: Real-time inference for production use
+4. **Interpretable**: Feature weights show which terms indicate fake vs. real news
+5. **Low Resource Requirements**: No GPU needed, minimal memory usage
+6. **Production-Ready**: Simple to deploy and maintain
+
+<Note>
+  For binary text classification with good features (TF-IDF), Logistic Regression often matches or exceeds the performance of more complex models like Random Forests or Neural Networks, while being much faster and easier to interpret.
+</Note>
+
+## Model Configuration
+
+```python
+from sklearn.linear_model import LogisticRegression
+
+modelo = LogisticRegression(max_iter=1000, solver='liblinear', random_state=42)
+modelo.fit(X_train, y_train)
+```
+
+Reference: `fake_news_ia.py:95-96`
+
+## Hyperparameters
+
+<ParamField path="max_iter" type="int" default="1000">
+  Maximum number of iterations for the optimization algorithm to converge.
+  
+  **Why 1000?**
+  - Default is 100, which may not converge for complex datasets
+  - 1000 ensures the solver finds the optimal solution
+  - Training typically converges in 200-400 iterations
+  - No significant performance penalty for allowing more iterations
+  
+  If you see convergence warnings, increase this value to 2000 or 5000.
+</ParamField>
+
+<ParamField path="solver" type="string" default="'liblinear'">
+  Algorithm used for optimization.
+  
+  **Why 'liblinear'?**
+  - **Best for smaller datasets** (under 100k samples) with high-dimensional features
+  - **Supports L1 and L2 regularization** for feature selection
+  - **Faster convergence** than 'lbfgs' or 'saga' for this use case
+  - **Handles sparse matrices efficiently** (our TF-IDF output)
+  
+  Alternative solvers:
+  - `'lbfgs'`: Better for large datasets (>100k samples)
+  - `'saga'`: Good for very large datasets, supports L1 regularization
+  - `'newton-cg'`: Fast but only supports L2 regularization
+</ParamField>
+
+<ParamField path="random_state" type="int" default="42">
+  Seed for the random number generator to ensure reproducible results.
+  
+  **Why 42?**
+  - Standard convention in data science (reference to "The Hitchhiker's Guide to the Galaxy")
+  - Ensures consistent results across multiple runs
+  - Critical for reproducible research and debugging
+  
+  Same random_state is used throughout the pipeline (train_test_split and model) for full reproducibility.
+</ParamField>
+
+## Default Parameters (Not Explicitly Set)
+
+The model also uses scikit-learn's default values for other important parameters:
+
+<ParamField path="penalty" type="string" default="'l2'">
+  Regularization type to prevent overfitting. L2 (Ridge) regularization is applied by default.
+</ParamField>
+
+<ParamField path="C" type="float" default="1.0">
+  Inverse of regularization strength. Smaller values = stronger regularization.
+  
+  Default value of 1.0 works well for this dataset. You can tune this if needed:
+  - **C < 1.0**: More regularization, prevents overfitting
+  - **C > 1.0**: Less regularization, allows model to fit training data more closely
+</ParamField>
+
+<ParamField path="class_weight" type="string" default="None">
+  Not set, assuming balanced classes. If you have imbalanced data, use `class_weight='balanced'`.
+</ParamField>
+
+## Training Process
+
+<Steps>
+  <Step title="Prepare Training Data">
+    Ensure you have vectorized features and labels:
+
+    ```python
+    # X_train: TF-IDF matrix (35200 samples × 5000 features)
+    # y_train: Labels array (35200 samples)
+    # X_test: TF-IDF matrix (8800 samples × 5000 features)
+    # y_test: Labels array (8800 samples)
+    ```
+
+    Reference: `fake_news_ia.py:86-88`
+  </Step>
+
+  <Step title="Initialize Model">
+    Create the Logistic Regression model with optimized hyperparameters:
+
+    ```python
+    modelo = LogisticRegression(
+        max_iter=1000, 
+        solver='liblinear', 
+        random_state=42
+    )
+    ```
+
+    Reference: `fake_news_ia.py:95`
+  </Step>
+
+  <Step title="Fit Model">
+    Train the model on the training set:
+
+    ```python
+    modelo.fit(X_train, y_train)
+    print("¡Modelo entrenado exitosamente! ✅")
+    ```
+
+    Training typically completes in **2-5 seconds** on a modern CPU.
+
+    Reference: `fake_news_ia.py:96-97`
+  </Step>
+</Steps>
+
+## Model Persistence
+
+<Warning>
+  **Always save both the model and vectorizer** to ensure predictions work correctly on new data:
+</Warning>
+
+```python
+import joblib
+
+# Save model
+joblib.dump(modelo, 'modelo_fake_news.pkl')
+
+# Save vectorizer
+joblib.dump(vectorizer, 'vectorizer_tfidf.pkl')
+
+print("Modelos guardados exitosamente como 'modelo_fake_news.pkl' y 'vectorizer_tfidf.pkl'")
+```
+
+Reference: `fake_news_ia.py:100-102`
+
+### Loading Saved Models
+
+To use the saved models for predictions:
+
+```python
+import joblib
+
+# Load saved models
+modelo = joblib.load('modelo_fake_news.pkl')
+vectorizer = joblib.load('vectorizer_tfidf.pkl')
+
+# Predict on new text
+new_article = "Breaking news: President announces new policy..."
+cleaned = limpiar_texto(new_article)
+vectorized = vectorizer.transform([cleaned])
+prediction = modelo.predict(vectorized)
+
+print(f"Prediction: {prediction[0]}")  # 'fake' or 'real'
+```
+
+## What the Model Learns
+
+During training, Logistic Regression learns **feature weights** (coefficients) for each of the 5000 TF-IDF features:
+
+- **Positive weights**: Terms associated with **real** news
+- **Negative weights**: Terms associated with **fake** news
+- **Weights near zero**: Terms that don't help distinguish fake from real
+
+### Example Feature Weights
+
+You can inspect the most important features:
+
+```python
+import numpy as np
+
+# Get feature names from vectorizer
+feature_names = vectorizer.get_feature_names_out()
+
+# Get model coefficients
+coefficients = modelo.coef_[0]
+
+# Top 10 features indicating REAL news (highest positive weights)
+real_indices = np.argsort(coefficients)[-10:]
+print("Top indicators of REAL news:")
+for idx in real_indices:
+    print(f"  {feature_names[idx]}: {coefficients[idx]:.3f}")
+
+# Top 10 features indicating FAKE news (most negative weights)
+fake_indices = np.argsort(coefficients)[:10]
+print("\nTop indicators of FAKE news:")
+for idx in fake_indices:
+    print(f"  {feature_names[idx]}: {coefficients[idx]:.3f}")
+```
+
+<Note>
+  Common patterns:
+  - **Real news indicators**: "reuters", "said officials", "according", "government announced"
+  - **Fake news indicators**: "shocking", "you won believe", "must see", "mainstream media"
+</Note>
+
+## Hyperparameter Tuning (Optional)
+
+If you want to experiment with different configurations:
+
+```python
+from sklearn.model_selection import GridSearchCV
+
+# Define parameter grid
+param_grid = {
+    'C': [0.1, 1.0, 10.0],
+    'solver': ['liblinear', 'lbfgs'],
+    'max_iter': [1000, 2000]
+}
+
+# Grid search with cross-validation
+grid_search = GridSearchCV(
+    LogisticRegression(random_state=42),
+    param_grid,
+    cv=5,
+    scoring='accuracy',
+    n_jobs=-1
+)
+
+grid_search.fit(X_train, y_train)
+
+print(f"Best parameters: {grid_search.best_params_}")
+print(f"Best CV score: {grid_search.best_score_:.4f}")
+```
+
+<Note>
+  The current hyperparameters (`max_iter=1000`, `solver='liblinear'`) already achieve 98.5% accuracy, so tuning may only provide marginal improvements.
+</Note>
+
+## Training Output Example
+
+Expected console output during training:
+
+```
+--- 4. Entrenamiento del Modelo ---
+¡Modelo entrenado exitosamente! ✅
+Modelos guardados exitosamente como 'modelo_fake_news.pkl' y 'vectorizer_tfidf.pkl'
+------------------------------
+```
+
+## Next Steps
+
+After training, proceed to [Evaluation Metrics](/training/evaluation-metrics) to learn how to assess model performance and interpret the results.

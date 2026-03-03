@@ -1,0 +1,246 @@
+---
+title: 'Streamlit Web Interface'
+description: 'Run and use the interactive web application to classify news articles in real-time'
+---
+
+## Overview
+
+The Streamlit web interface provides an intuitive, interactive way to classify news articles without writing code. Users can paste article text directly into a browser and get instant classification results.
+
+## Installation
+
+Before running the app, ensure you have Streamlit installed:
+
+```bash
+pip install streamlit
+```
+
+## Running the Application
+
+<Steps>
+  <Step title="Train the Model First">
+    Make sure you have trained the model and generated the `.pkl` files:
+
+    ```bash
+    python fake_news_ia.py
+    ```
+
+    This creates:
+    - `modelo_fake_news.pkl` - The trained Logistic Regression model
+    - `vectorizer_tfidf.pkl` - The TF-IDF vectorizer
+  </Step>
+
+  <Step title="Launch the Streamlit App">
+    Start the web interface:
+
+    ```bash
+    streamlit run app.py
+    ```
+
+    The app will automatically open in your default browser at `http://localhost:8501`
+  </Step>
+
+  <Step title="Use the Interface">
+    1. Paste or type a news article into the text area
+    2. Click the "Clasificar Noticia" button
+    3. View the classification result
+  </Step>
+</Steps>
+
+## Application Architecture
+
+The Streamlit app (`app.py:1-78`) consists of three main components:
+
+### 1. Model Loading
+
+When the app starts, it loads the trained models:
+
+```python app.py:8-19
+try:
+    # Load trained model and vectorizer
+    modelo = joblib.load('modelo_fake_news.pkl')
+    vectorizer = joblib.load('vectorizer_tfidf.pkl')
+    stop_words = set(stopwords.words("english"))
+    
+    print("Modelos y Vectorizador cargados exitosamente.")
+except FileNotFoundError:
+    st.error("Error: Archivos de modelo o vectorizador (.pkl) no encontrados.")
+    st.error("Asegúrate de ejecutar 'fake_news_ia.py' primero.")
+    sys.exit()
+```
+
+<Note>
+  If the `.pkl` files are missing, the app displays an error message and exits gracefully.
+</Note>
+
+### 2. Text Preprocessing
+
+The same `limpiar_texto` function used in training:
+
+```python app.py:24-39
+def limpiar_texto(texto):
+    # 1. Remove metadata/source
+    texto = re.sub(r'([A-Z\s]+)\s*\((REUTERS|AP|AFP)\)\s*\-\s*', '', str(texto), flags=re.IGNORECASE)
+    
+    # 2. Convert to lowercase
+    texto = str(texto).lower()
+    
+    # 3. Remove punctuation, numbers, special characters
+    texto = re.sub(r'[^a-z\s]', '', texto) 
+    
+    # 4. Tokenize with split()
+    tokens = texto.split() 
+
+    # 5. Filter stopwords and single-letter tokens
+    tokens = [t for t in tokens if t not in stop_words and len(t) > 1]
+    return " ".join(tokens)
+```
+
+### 3. User Interface
+
+The interactive classification workflow:
+
+```python app.py:43-78
+st.title("📰 Detector de Noticias Falsas (IA)")
+st.markdown("---")
+
+st.header("Ingresa la noticia a clasificar:")
+
+# Text input area
+noticia_input = st.text_area(
+    "Pega el texto de la noticia aquí:",
+    height=200,
+    placeholder="Ej: The European Union formally approved a new trade agreement..."
+)
+
+# Classification button
+if st.button("Clasificar Noticia"):
+    if noticia_input:
+        with st.spinner('Clasificando...'):
+            # 1. Clean the text
+            noticia_limpia = limpiar_texto(noticia_input)
+            
+            # 2. Vectorize using trained vectorizer
+            noticia_vec = vectorizer.transform([noticia_limpia])
+            
+            # 3. Make prediction
+            prediccion = modelo.predict(noticia_vec)[0]
+            
+            # 4. Display result
+            st.markdown("### Resultado de la Clasificación:")
+            
+            if prediccion == 'real':
+                st.success(f"✅ La noticia es clasificada como **{prediccion.upper()}**")
+                st.balloons()  # Celebration animation
+            else:
+                st.error(f"❌ La noticia es clasificada como **{prediccion.upper()}**")
+                
+    else:
+        st.warning("Por favor, pega el texto de una noticia para clasificar.")
+```
+
+## User Interface Components
+
+### Text Input Area
+
+The main input component where users paste news articles:
+
+- **Height**: 200px for comfortable reading
+- **Placeholder**: Example text to guide users
+- **Variable**: `noticia_input` stores the user's text
+
+### Classification Button
+
+Triggers the prediction pipeline when clicked:
+
+1. Validates input is not empty
+2. Shows spinner during processing
+3. Processes text through the full pipeline
+4. Displays formatted results
+
+### Results Display
+
+Two different result presentations:
+
+<CodeGroup>
+```python Real News Result
+if prediccion == 'real':
+    st.success(f"✅ La noticia es clasificada como **{prediccion.upper()}**")
+    st.balloons()  # Shows celebration animation
+```
+
+```python Fake News Result
+else:
+    st.error(f"❌ La noticia es clasificada como **{prediccion.upper()}**")
+```
+</CodeGroup>
+
+## Example Usage
+
+### Testing with Sample Articles
+
+Try these example news articles:
+
+**Real News Example:**
+```text
+The European Union formally approved a new trade agreement with Canada on Thursday following a vote in the European Parliament in Brussels. Officials said the agreement is expected to strengthen economic cooperation and reduce tariffs on industrial goods over the next five years.
+```
+
+**Fake News Example:**
+```text
+A secret meeting was held at the UN headquarters where delegates voted to replace all sugary drinks with green juice to boost the global population by 500 years.
+```
+
+## Prediction Workflow
+
+<Steps>
+  <Step title="User Input">
+    User pastes news article text into the text area
+  </Step>
+
+  <Step title="Text Cleaning">
+    `limpiar_texto()` removes metadata, converts to lowercase, removes punctuation, and filters stopwords
+  </Step>
+
+  <Step title="Vectorization">
+    `vectorizer.transform()` converts cleaned text into TF-IDF numerical features
+  </Step>
+
+  <Step title="Classification">
+    `modelo.predict()` uses Logistic Regression to classify as 'real' or 'fake'
+  </Step>
+
+  <Step title="Result Display">
+    Green success message with balloons for real news, red error message for fake news
+  </Step>
+</Steps>
+
+## Error Handling
+
+The app handles several error conditions:
+
+**Missing Model Files:**
+```python
+st.error("Error: Archivos de modelo o vectorizador (.pkl) no encontrados.")
+st.error("Asegúrate de ejecutar 'fake_news_ia.py' primero.")
+```
+
+**Empty Input:**
+```python
+st.warning("Por favor, pega el texto de una noticia para clasificar.")
+```
+
+## Customization
+
+You can customize the app by modifying `app.py`:
+
+- Change the title and headers
+- Adjust text area height
+- Modify result display styling
+- Add additional input validation
+- Include confidence scores in results
+
+## Next Steps
+
+- Learn about [programmatic predictions](/inference/prediction-api) for API integration
+- Explore [batch processing](/inference/batch-processing) for multiple articles at once

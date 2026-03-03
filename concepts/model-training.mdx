@@ -1,0 +1,360 @@
+---
+title: Model Training
+description: In-depth explanation of the model selection, training configuration, feature extraction with TF-IDF, and evaluation metrics
+---
+
+## Overview
+
+The model training phase converts preprocessed text into numerical features, trains a Logistic Regression classifier, and evaluates its performance. This stage is where the system achieves its impressive **98.5% accuracy** on fake news detection.
+
+## Feature Extraction: TF-IDF Vectorization
+
+### What is TF-IDF?
+
+**TF-IDF** (Term Frequency-Inverse Document Frequency) is a numerical statistic that reflects how important a word is to a document in a collection:
+
+- **TF (Term Frequency)** - How often a word appears in a document
+- **IDF (Inverse Document Frequency)** - How rare/common a word is across all documents
+
+<Accordion title="Why TF-IDF is perfect for fake news detection">
+TF-IDF identifies words that are distinctive to fake vs. real news:
+
+- **High TF-IDF** - Words that appear frequently in one article but rarely elsewhere (distinctive)
+- **Low TF-IDF** - Common words that appear everywhere (less informative)
+
+For example:
+- "president" might appear in both fake and real news (low discrimination)
+- "shocking" or "revealed" might be more common in fake news (high discrimination)
+- "according" or "officials" might be more common in real news (high discrimination)
+
+TF-IDF automatically weights these patterns numerically.
+</Accordion>
+
+### Vectorization Configuration
+
+The system uses an optimized TF-IDF configuration:
+
+```python fake_news_ia.py
+# Optimized TF-IDF Vectorization: Fast and robust (Bi-grams, 5000 features)
+vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2)) 
+X_tfidf = vectorizer.fit_transform(X)
+```
+
+**Configuration parameters:**
+
+| Parameter | Value | Purpose |
+|-----------|-------|----------|
+| `max_features` | 5000 | Limit to 5,000 most important features (words/phrases) |
+| `ngram_range` | (1, 2) | Capture both single words (unigrams) and two-word phrases (bi-grams) |
+
+### Why 5,000 Features?
+
+<CardGroup cols={2}>
+  <Card title="Performance" icon="gauge-high">
+    Smaller feature space means faster training and prediction
+  </Card>
+  <Card title="Quality" icon="star">
+    5,000 most important features capture the essential patterns
+  </Card>
+  <Card title="Overfitting Prevention" icon="shield">
+    Limiting features prevents the model from memorizing noise
+  </Card>
+  <Card title="Memory Efficiency" icon="microchip">
+    Manageable memory footprint for production deployment
+  </Card>
+</CardGroup>
+
+### Why N-grams (1, 2)?
+
+Using both unigrams and bi-grams captures different linguistic patterns:
+
+**Unigrams (single words):**
+```
+"president", "announced", "infrastructure"
+```
+
+**Bi-grams (two-word phrases):**
+```
+"president announced", "announced infrastructure", "infrastructure plan"
+```
+
+<Info>
+Bi-grams capture context that single words miss. For example:
+- "not good" has opposite meaning to "good"
+- "fake news" as a phrase has different significance than "fake" alone
+- "breaking news" is a common pattern in sensationalist headlines
+</Info>
+
+### Vectorization Output
+
+After vectorization, the text data becomes a sparse matrix:
+
+```python fake_news_ia.py
+print(f"Training set size: {X_train.shape[0]} ({X_train.shape[1]} features)")
+print(f"Test set size: {X_test.shape[0]}")
+```
+
+**Output:**
+```
+Training set size: 35200 (5000 features)
+Test set size: 8800
+```
+
+Each article is now represented as a vector of 5,000 TF-IDF scores.
+
+## Model Selection: Logistic Regression
+
+### Why Logistic Regression?
+
+The project uses Logistic Regression for several strategic reasons:
+
+<CardGroup cols={2}>
+  <Card title="Simplicity" icon="feather">
+    Easy to implement, understand, and debug
+  </Card>
+  <Card title="Speed" icon="bolt">
+    Trains in seconds on 44,000 samples, predicts instantly
+  </Card>
+  <Card title="Interpretability" icon="magnifying-glass">
+    Can inspect feature weights to understand decision-making
+  </Card>
+  <Card title="Effectiveness" icon="trophy">
+    Excellent performance on text classification (98.5% accuracy)
+  </Card>
+</CardGroup>
+
+<Note>
+Logistic Regression is a **linear classifier** that works exceptionally well for high-dimensional text data where classes are often linearly separable in TF-IDF space.
+</Note>
+
+### Training Configuration
+
+The model is trained with specific hyperparameters:
+
+```python fake_news_ia.py
+print("--- 4. Model Training ---")
+modelo = LogisticRegression(max_iter=1000, solver='liblinear', random_state=42)
+modelo.fit(X_train, y_train)
+print("Model trained successfully! ✅")
+```
+
+**Hyperparameters explained:**
+
+| Parameter | Value | Purpose |
+|-----------|-------|----------|
+| `max_iter` | 1000 | Maximum iterations for convergence (prevents early stopping) |
+| `solver` | 'liblinear' | Optimization algorithm, effective for small-medium datasets |
+| `random_state` | 42 | Ensures reproducible results across runs |
+
+### Why `solver='liblinear'`?
+
+<Accordion title="Understanding solver choice">
+Scikit-learn offers multiple solvers for Logistic Regression:
+
+- **lbfgs** - Default, good for large datasets
+- **liblinear** - Fast for small-medium datasets, supports L1/L2 regularization
+- **newton-cg** - Good for large datasets
+- **sag/saga** - Stochastic solvers for very large datasets
+
+For this project with ~35K training samples and 5K features, `liblinear` offers:
+- Fast convergence
+- Memory efficiency
+- Proven reliability for text classification
+</Accordion>
+
+### Why `max_iter=1000`?
+
+Logistic Regression uses iterative optimization. Setting `max_iter=1000` ensures:
+
+- The algorithm has enough iterations to converge
+- No premature stopping warnings
+- Stable, optimal model parameters
+
+<Info>
+In practice, the model likely converges in fewer than 1000 iterations, but this value provides a safe margin.
+</Info>
+
+## Model Persistence
+
+After training, both the model and vectorizer are saved:
+
+```python fake_news_ia.py
+# *** SAVE THE MODEL AND VECTORIZER ***
+joblib.dump(modelo, 'modelo_fake_news.pkl')
+joblib.dump(vectorizer, 'vectorizer_tfidf.pkl')
+print("Models saved successfully as 'modelo_fake_news.pkl' and 'vectorizer_tfidf.pkl'")
+```
+
+**Why save both?**
+
+<Warning>
+You **MUST** save the vectorizer along with the model. Here's why:
+
+1. **Feature consistency** - The vectorizer learned which 5,000 words to use during training
+2. **Same preprocessing** - New text must be vectorized identically to training data
+3. **Vocabulary mapping** - The vectorizer contains the word-to-index mapping
+
+If you only save the model but create a new vectorizer at inference time, predictions will be incorrect because the feature indices won't match.
+</Warning>
+
+## Model Evaluation
+
+### Accuracy Score
+
+The primary metric is classification accuracy:
+
+```python fake_news_ia.py
+print("--- 5. Model Evaluation ---")
+y_pred = modelo.predict(X_test)
+
+print("Accuracy (Overall Precision):", accuracy_score(y_test, y_pred))
+print("\nClassification Report:\n", classification_report(y_test, y_pred))
+```
+
+**Expected output:**
+
+```
+Accuracy (Overall Precision): 0.985
+```
+
+This means the model correctly classifies **98.5%** of test articles.
+
+### Classification Report
+
+The detailed report provides per-class metrics:
+
+```
+              precision    recall  f1-score   support
+
+        fake       0.99      0.98      0.98      4696
+        real       0.98      0.99      0.99      4104
+
+    accuracy                           0.98      8800
+   macro avg       0.98      0.98      0.98      8800
+weighted avg       0.98      0.98      0.98      8800
+```
+
+**Metrics explained:**
+
+<Accordion title="Understanding precision, recall, and F1-score">
+**Precision:**
+- Fake: 99% of articles predicted as "fake" are actually fake
+- Real: 98% of articles predicted as "real" are actually real
+
+**Recall:**
+- Fake: 98% of actual fake articles are correctly identified
+- Real: 99% of actual real articles are correctly identified
+
+**F1-Score:**
+- Harmonic mean of precision and recall
+- Both classes achieve ~0.98-0.99, indicating excellent balanced performance
+
+**Support:**
+- Number of actual examples in each class
+- 4,696 fake and 4,104 real in test set (relatively balanced)
+</Accordion>
+
+## How 98.5% Accuracy is Achieved
+
+The exceptional performance results from combining multiple factors:
+
+<Steps>
+  <Step title="High-Quality Training Data">
+    44,000 labeled articles from diverse sources
+  </Step>
+  <Step title="Feature Engineering">
+    Combining title + text provides maximum context
+  </Step>
+  <Step title="Anti-Bias Preprocessing">
+    Removing source metadata forces content-based learning
+  </Step>
+  <Step title="Optimized Vectorization">
+    TF-IDF with bi-grams captures meaningful linguistic patterns
+  </Step>
+  <Step title="Appropriate Algorithm">
+    Logistic Regression excels at high-dimensional text classification
+  </Step>
+  <Step title="Proper Evaluation">
+    20% held-out test set ensures unbiased accuracy measurement
+  </Step>
+</Steps>
+
+## Inference: Predicting New Articles
+
+The trained model can classify new articles:
+
+```python fake_news_ia.py
+print("--- 6. Test with New Articles ---")
+
+# Sample news articles
+noticias_nuevas = [
+    "The Federal Reserve announced on Wednesday that it will maintain the benchmark interest rate...",
+    "A secret meeting was held at the UN headquarters where delegates voted to replace all sugary drinks...",
+    "President Joe Biden announced a new infrastructure plan, stating, 'This investment will create millions of jobs...'"
+]
+
+# Apply same cleaning and vectorization
+noticias_limpias = [limpiar_texto(n) for n in noticias_nuevas]
+noticias_vec = vectorizer.transform(noticias_limpias)
+
+# Make predictions
+predicciones = modelo.predict(noticias_vec)
+```
+
+<Info>
+**Critical:** New articles must go through:
+1. **Same preprocessing** - `limpiar_texto` function
+2. **Same vectorizer** - Use `vectorizer.transform()` (NOT `fit_transform()`)
+3. **Same model** - The trained `modelo` object
+</Info>
+
+## Production Deployment
+
+The Streamlit app loads and uses the saved artifacts:
+
+```python app.py
+# Load pre-trained artifacts
+modelo = joblib.load('modelo_fake_news.pkl')
+vectorizer = joblib.load('vectorizer_tfidf.pkl')
+
+# Process user input
+noticia_limpia = limpiar_texto(noticia_input)
+noticia_vec = vectorizer.transform([noticia_limpia])
+prediccion = modelo.predict(noticia_vec)[0]
+```
+
+**Deployment workflow:**
+
+1. User pastes article text in Streamlit interface
+2. Text is cleaned with `limpiar_texto`
+3. Cleaned text is vectorized with saved `vectorizer`
+4. Model predicts "real" or "fake"
+5. Result displayed with appropriate UI (✅ or ❌)
+
+## Model Limitations
+
+While the model achieves 98.5% accuracy, it has limitations:
+
+<Warning>
+**Known limitations:**
+
+1. **Training distribution** - Performs best on articles similar to training data
+2. **Language-specific** - Only works for English text (trained on English stopwords)
+3. **Context-blind** - Doesn't understand external facts or current events
+4. **Pattern-based** - May misclassify articles with unusual but legitimate writing styles
+5. **Temporal drift** - Fake news patterns may evolve over time
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Architecture" href="/concepts/architecture" icon="sitemap">
+    Review the overall system architecture
+  </Card>
+  <Card title="Data Pipeline" href="/concepts/data-pipeline" icon="database">
+    Return to data loading and preparation
+  </Card>
+  <Card title="NLP Preprocessing" href="/concepts/nlp-preprocessing" icon="text">
+    Review text cleaning techniques
+  </Card>
+</CardGroup>

@@ -1,0 +1,173 @@
+---
+title: Installation
+description: Set up your Python environment and install all required dependencies for the Fake News Detector
+---
+
+This guide covers everything you need to install and configure the Fake News Detector on your local machine.
+
+## Requirements
+
+Before you begin, ensure you have:
+
+- Python 3.7 or higher
+- pip (Python package manager)
+- Git (optional, for cloning the repository)
+- 2GB of free disk space (for datasets and NLTK data)
+
+## Installation steps
+
+<Steps>
+  <Step title="Clone or download the project">
+    If you're using Git, clone the repository:
+    
+    ```bash
+    git clone https://github.com/MisaelCast/Proyecto-IA.git
+    cd Proyecto-IA
+    ```
+    
+    Otherwise, download and extract the project files to a directory.
+  </Step>
+  
+  <Step title="Create a virtual environment">
+    Create an isolated Python environment to avoid dependency conflicts:
+    
+    <CodeGroup>
+    ```bash Linux/macOS
+    python3 -m venv .venv
+    source .venv/bin/activate
+    ```
+    
+    ```bash Windows (Command Prompt)
+    python -m venv .venv
+    .venv\Scripts\activate
+    ```
+    
+    ```bash Windows (PowerShell)
+    python -m venv .venv
+    .venv\Scripts\Activate.ps1
+    ```
+    </CodeGroup>
+    
+    You should see `(.venv)` in your terminal prompt indicating the virtual environment is active.
+    
+    <Tip>
+    Always activate the virtual environment before working with the project to ensure you're using the correct dependencies.
+    </Tip>
+  </Step>
+  
+  <Step title="Install Python dependencies">
+    Install all required packages using pip:
+    
+    ```bash
+    pip install pandas nltk scikit-learn joblib streamlit
+    ```
+    
+    This installs:
+    - **pandas** - Data manipulation and CSV loading
+    - **nltk** - Natural Language Toolkit for text preprocessing
+    - **scikit-learn** - Machine learning library with TF-IDF and Logistic Regression
+    - **joblib** - Model serialization and persistence
+    - **streamlit** - Web application framework
+  </Step>
+  
+  <Step title="Download NLTK data">
+    The model requires NLTK's stopwords and tokenizers. Download them with:
+    
+    ```bash
+    python3 -c 'import nltk; nltk.download("stopwords"); nltk.download("punkt")'
+    ```
+    
+    This downloads:
+    - English stopwords (common words like "the", "is", "and" to be filtered out)
+    - Punkt tokenizer (for sentence and word tokenization)
+    
+    <Note>
+    NLTK data is downloaded to `~/nltk_data/` by default and is approximately 50MB.
+    </Note>
+  </Step>
+  
+  <Step title="Download the datasets">
+    The model requires two CSV files from Kaggle:
+    
+    - `Fake.csv` - Collection of fake news articles
+    - `True.csv` - Collection of real news articles
+    
+    Download these files and place them in your project directory alongside `fake_news_ia.py`.
+    
+    <Warning>
+    The training script will fail if these files are not present. Ensure both CSV files are in the same directory as the Python scripts.
+    </Warning>
+  </Step>
+</Steps>
+
+## Verify installation
+
+Confirm everything is installed correctly:
+
+```bash
+python3 -c "import pandas, nltk, sklearn, joblib, streamlit; print('All dependencies installed successfully!')"
+```
+
+If you see the success message, you're ready to proceed to the [quickstart guide](/quickstart).
+
+## Troubleshooting
+
+### NLTK stopwords not found
+
+If you see an error about missing stopwords when running the scripts:
+
+```bash
+Error: Necesitas descargar las stopwords de NLTK.
+```
+
+Run the NLTK download command again:
+
+```bash
+python3 -c 'import nltk; nltk.download("stopwords")'
+```
+
+### Model files not found
+
+If the Streamlit app shows:
+
+```bash
+Error: Archivos de modelo o vectorizador (.pkl) no encontrados.
+```
+
+You need to train the model first:
+
+```bash
+python3 fake_news_ia.py
+```
+
+This creates `modelo_fake_news.pkl` and `vectorizer_tfidf.pkl` required by the app.
+
+### CSV files not found
+
+If training fails with:
+
+```bash
+Error: Asegúrate de que los archivos 'Fake.csv' y 'True.csv' estén en la misma carpeta.
+```
+
+Ensure both CSV files are in your project directory and not in a subdirectory.
+
+## Package versions
+
+The project is tested with:
+
+- pandas 1.3+
+- nltk 3.6+
+- scikit-learn 0.24+
+- joblib 1.0+
+- streamlit 1.0+
+
+Newer versions should work, but if you encounter issues, you can install specific versions:
+
+```bash
+pip install pandas==1.3.0 nltk==3.6 scikit-learn==0.24.0 joblib==1.0.0 streamlit==1.0.0
+```
+
+## Next steps
+
+Now that installation is complete, head to the [quickstart guide](/quickstart) to train your model and classify your first article.

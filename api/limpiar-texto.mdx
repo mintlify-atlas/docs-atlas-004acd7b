@@ -1,0 +1,137 @@
+---
+title: 'limpiar_texto'
+description: 'Text preprocessing function that cleans and normalizes news article text for fake news classification'
+---
+
+## Overview
+
+The `limpiar_texto` function is a critical preprocessing step that cleans and normalizes raw news text before vectorization and classification. It applies a 5-step pipeline to remove noise, standardize formatting, and filter irrelevant tokens.
+
+## Function Signature
+
+```python
+def limpiar_texto(texto)
+```
+
+## Parameters
+
+<ParamField path="texto" type="string" required>
+  Raw news article text to be cleaned. Can include title, body text, or combined content. The function handles conversion to string internally.
+</ParamField>
+
+## Returns
+
+<ResponseField name="cleaned_text" type="string">
+  Preprocessed text with metadata removed, normalized to lowercase, special characters eliminated, and stopwords filtered out. Tokens are space-separated.
+</ResponseField>
+
+## Implementation Details
+
+The function performs five sequential cleaning steps:
+
+### Step 1: Remove Metadata/Source Attribution
+```python
+texto = re.sub(r'([A-Z\s]+)\s*\((REUTERS|AP|AFP)\)\s*\-\s*', '', str(texto), flags=re.IGNORECASE)
+```
+Removes patterns like `WASHINGTON (REUTERS) -` or `NEW YORK (AP) -` that appear at the beginning of news articles.
+
+### Step 2: Convert to Lowercase
+```python
+texto = str(texto).lower()
+```
+Normalizes all characters to lowercase for consistent processing.
+
+### Step 3: Remove Punctuation, Numbers, and Special Characters
+```python
+texto = re.sub(r'[^a-z\s]', '', texto)
+```
+Keeps only lowercase letters and whitespace, eliminating all punctuation, digits, and special characters.
+
+### Step 4: Tokenization
+```python
+tokens = texto.split()
+```
+Splits the cleaned text into individual word tokens using whitespace as delimiter.
+
+### Step 5: Filter Stopwords and Single-Character Tokens
+```python
+tokens = [t for t in tokens if t not in stop_words and len(t) > 1]
+return " ".join(tokens)
+```
+Removes English stopwords (using NLTK's stopwords corpus) and any tokens with only one character, then rejoins tokens with spaces.
+
+## Complete Implementation
+
+```python fake_news_ia.py:54-69
+import re
+from nltk.corpus import stopwords
+
+stop_words = set(stopwords.words("english"))
+
+def limpiar_texto(texto):
+    # 1. ELIMINAR METADATA/FUENTE: Quita patrones como 'LUGAR (AGENCIA) - '
+    texto = re.sub(r'([A-Z\s]+)\s*\((REUTERS|AP|AFP)\)\s*\-\s*', '', str(texto), flags=re.IGNORECASE)
+    
+    # 2. Convertir a minúsculas
+    texto = str(texto).lower()
+    
+    # 3. Eliminar puntuación, números y caracteres especiales
+    texto = re.sub(r'[^a-z\s]', '', texto) 
+    
+    # 4. Tokenización con split() 
+    tokens = texto.split() 
+
+    # 5. Filtrar stopwords y tokens de una sola letra
+    tokens = [t for t in tokens if t not in stop_words and len(t) > 1]
+    return " ".join(tokens)
+```
+
+## Usage Example
+
+```python
+from nltk.corpus import stopwords
+import re
+
+stop_words = set(stopwords.words("english"))
+
+# Example news article
+raw_text = "WASHINGTON (REUTERS) - The Federal Reserve announced on Wednesday that it will maintain the benchmark interest rate."
+
+# Clean the text
+cleaned = limpiar_texto(raw_text)
+print(cleaned)
+# Output: "federal reserve announced wednesday maintain benchmark interest rate"
+```
+
+## Usage in Training Pipeline
+
+```python fake_news_ia.py:72
+# Applied to combined title + text column
+df["clean_text"] = df["full_text"].apply(limpiar_texto)
+```
+
+## Usage in Prediction Pipeline
+
+```python app.py:60
+# Clean user input before vectorization
+noticia_limpia = limpiar_texto(noticia_input)
+noticia_vec = vectorizer.transform([noticia_limpia])
+```
+
+## Important Notes
+
+<Warning>
+  **Consistency is Critical**: The exact same `limpiar_texto` function MUST be used for both training and prediction. Any deviation in the cleaning logic will cause distribution mismatch and degrade model performance.
+</Warning>
+
+<Info>
+  **NLTK Dependency**: This function requires NLTK's English stopwords corpus. Download it with:
+  ```bash
+  python3 -c 'import nltk; nltk.download("stopwords")'
+  ```
+</Info>
+
+## See Also
+
+- [TfidfVectorizer Configuration](/api/tfidf-vectorizer) - Next step after text cleaning
+- [Prediction Function](/api/predict) - How cleaned text is used for classification

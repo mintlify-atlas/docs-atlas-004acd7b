@@ -1,0 +1,248 @@
+---
+title: Model Persistence
+description: Save and load trained models with joblib for production deployment
+---
+
+## Overview
+
+After training a machine learning model, you need to **persist** it to disk so it can be loaded in production without retraining. This page explains how the fake news detector uses `joblib` to save and load both the trained classifier and the TF-IDF vectorizer.
+
+## Why Persistence Matters
+
+Training the logistic regression model takes time and computational resources:
+
+- Loading ~40,000+ news articles
+- Text preprocessing and cleaning
+- TF-IDF vectorization with 5,000 features and bi-grams
+- Model training over 1,000 iterations
+
+In production, **you cannot retrain every time** a user submits a news article. Instead:
+
+1. Train once (offline) → Save model artifacts
+2. Load artifacts (on app startup) → Use for all predictions
+3. Retrain periodically with new data → Update saved artifacts
+
+## What Gets Saved
+
+The detector saves **two critical objects** (`fake_news_ia.py:100-102`):
+
+```python
+# Save the trained classifier
+joblib.dump(modelo, 'modelo_fake_news.pkl')
+
+# Save the fitted vectorizer
+joblib.dump(vectorizer, 'vectorizer_tfidf.pkl')
+
+print("Modelos guardados exitosamente")
+```
+
+### 1. The Trained Model (`modelo_fake_news.pkl`)
+
+This is the `LogisticRegression` classifier after fitting on 80% of the dataset:
+
+```python
+modelo = LogisticRegression(max_iter=1000, solver='liblinear', random_state=42)
+modelo.fit(X_train, y_train)
+```
+
+The saved model contains:
+- Learned weights for each of the 5,000 TF-IDF features
+- Intercept/bias term
+- Hyperparameters (solver, max iterations, etc.)
+
+### 2. The Fitted Vectorizer (`vectorizer_tfidf.pkl`)
+
+This is the `TfidfVectorizer` after fitting on the training text:
+
+```python
+vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+X_tfidf = vectorizer.fit_transform(X)
+```
+
+The saved vectorizer contains:
+- The **vocabulary mapping** (which 5,000 words/bi-grams were selected)
+- IDF (Inverse Document Frequency) weights for each term
+- Configuration (ngram_range, max_features, etc.)
+
+<Warning>
+**Critical:** You must save BOTH the model and the vectorizer. The model expects input in the exact same 5,000-dimensional feature space that the vectorizer creates.
+</Warning>
+
+## Why Both Are Required
+
+Consider what happens during prediction:
+
+```python
+# User submits new text
+noticia_nueva = "The president announced a new policy..."
+
+# Step 1: Text preprocessing
+noticia_limpia = limpiar_texto(noticia_nueva)
+
+# Step 2: Transform to TF-IDF features
+noticia_vec = vectorizer.transform([noticia_limpia])  # ← Must use SAME vectorizer
+
+# Step 3: Predict
+prediccion = modelo.predict(noticia_vec)  # ← Model expects these features
+```
+
+If you tried to create a **new** vectorizer in production:
+
+```python
+# This WILL NOT WORK!
+new_vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+noticia_vec = new_vectorizer.fit_transform([noticia_limpia])
+```
+
+Problems:
+- The new vectorizer has a different vocabulary (different 5,000 words)
+- Feature indices don't match what the model expects
+- IDF weights are completely different
+- **Predictions will be garbage**
+
+<Note>
+The vectorizer must be **fitted** on the training data and **transformed** on new data. Never fit on production data!
+</Note>
+
+## Loading in Production
+
+The Streamlit app (`app.py:10-11`) loads both artifacts at startup:
+
+```python
+try:
+    # Load the trained model and vectorizer
+    modelo = joblib.load('modelo_fake_news.pkl')
+    vectorizer = joblib.load('vectorizer_tfidf.pkl')
+    stop_words = set(stopwords.words("english"))
+    
+    print("Modelos y Vectorizador cargados exitosamente.")
+except FileNotFoundError:
+    st.error("Error: Archivos de modelo o vectorizador (.pkl) no encontrados.")
+    st.error("Asegúrate de ejecutar 'fake_news_ia.py' primero.")
+    sys.exit()
+```
+
+### Error Handling
+
+The try-except block ensures:
+- Clear error message if `.pkl` files are missing
+- App exits gracefully if models aren't available
+- Users are directed to train the model first
+
+## File Format: Why Joblib?
+
+Python has several serialization options:
+
+| Library | Pros | Cons |
+|---------|------|------|
+| `pickle` | Built-in, simple | Slower for large numpy arrays |
+| `joblib` | **Optimized for ML models**, efficient compression | Requires installation |
+| `json` | Human-readable | Can't serialize complex objects |
+
+**Joblib is preferred because:**
+- Efficient handling of large numpy arrays (like TF-IDF matrices)
+- Better compression for model weights
+- Standard in scikit-learn workflows
+- Compatible with all scikit-learn objects
+
+<Tip>
+Joblib is a dependency of scikit-learn, so if you have `sklearn` installed, you already have `joblib`.
+</Tip>
+
+## Production Workflow
+
+Here's the complete training-to-deployment pipeline:
+
+```bash
+# 1. Train and save models (run once, or when retraining)
+python3 fake_news_ia.py
+# Output: modelo_fake_news.pkl, vectorizer_tfidf.pkl
+
+# 2. Deploy the app (loads saved models)
+streamlit run app.py
+```
+
+## Model Versioning
+
+For production systems, implement versioning:
+
+```python
+import datetime
+
+# Save with timestamp
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+joblib.dump(modelo, f'modelo_fake_news_{timestamp}.pkl')
+joblib.dump(vectorizer, f'vectorizer_tfidf_{timestamp}.pkl')
+
+# Keep track of which version is "production"
+with open('current_model.txt', 'w') as f:
+    f.write(timestamp)
+```
+
+Load the current version:
+
+```python
+with open('current_model.txt', 'r') as f:
+    version = f.read().strip()
+
+modelo = joblib.load(f'modelo_fake_news_{version}.pkl')
+vectorizer = joblib.load(f'vectorizer_tfidf_{version}.pkl')
+```
+
+## Retraining Strategy
+
+When to retrain and update saved models:
+
+- **New data available**: More fake/real news examples collected
+- **Performance degradation**: Accuracy drops on recent articles
+- **Periodic schedule**: Monthly or quarterly retraining
+- **Major events**: Language patterns may shift after major news events
+
+<Warning>
+Always validate new models on a held-out test set before replacing production models. Never auto-deploy without human review.
+</Warning>
+
+## Deployment Checklist
+
+Before deploying:
+
+- [ ] `modelo_fake_news.pkl` exists and loads without errors
+- [ ] `vectorizer_tfidf.pkl` exists and loads without errors
+- [ ] Both files are in the same directory as `app.py`
+- [ ] Test prediction on sample inputs works correctly
+- [ ] Model version is documented
+- [ ] Backup of previous model version is saved
+
+## Common Issues
+
+### Issue: "No module named 'sklearn'"
+
+**Cause:** Scikit-learn version mismatch between training and production
+
+**Solution:** Use the same Python environment and dependency versions:
+
+```bash
+# During training
+pip freeze > requirements.txt
+
+# In production
+pip install -r requirements.txt
+```
+
+### Issue: Model predictions are random
+
+**Cause:** Using a different vectorizer or creating a new one
+
+**Solution:** Always load the saved `vectorizer_tfidf.pkl` - never create a new vectorizer in production
+
+## Key Takeaways
+
+- Save **both** the model and vectorizer with `joblib.dump()`
+- Load **both** in production with `joblib.load()`
+- Never fit a new vectorizer in production - always use the saved one
+- Implement versioning for production systems
+- Test loaded models before deployment
+
+---
+
+Next: Learn how to extend the system with [Custom Features](/advanced/custom-features).

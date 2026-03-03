@@ -1,0 +1,82 @@
+---
+title: Fake News Detector
+description: AI-powered fake news detection using NLP and Logistic Regression with 98.5% accuracy
+---
+
+## Detect fake news with machine learning
+
+This project is an AI-powered fake news detector that uses Natural Language Processing (NLP) and Logistic Regression to classify news articles as real or fake with 98.5% accuracy. Built with scikit-learn and deployed as an interactive Streamlit web application.
+
+The model is trained on approximately 44,000 news articles and uses TF-IDF vectorization with unigrams and bigrams to capture semantic patterns in fake news content.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="98.5% accuracy" icon="bullseye">
+    Achieves high precision through optimized TF-IDF vectorization and Logistic Regression
+  </Card>
+  
+  <Card title="TF-IDF with N-grams" icon="chart-network">
+    Uses unigrams and bigrams with 5,000 features to capture key phrases and patterns
+  </Card>
+  
+  <Card title="44,000 training samples" icon="database">
+    Trained on large dataset from Kaggle's Fake and Real News collections
+  </Card>
+  
+  <Card title="Interactive Streamlit UI" icon="window">
+    Easy-to-use web interface for real-time news classification
+  </Card>
+  
+  <Card title="Anti-bias design" icon="shield-check">
+    Removes source metadata to ensure the model focuses on content, not publisher
+  </Card>
+  
+  <Card title="NLP preprocessing" icon="wand-magic-sparkles">
+    Advanced text cleaning with stopword removal and metadata filtering
+  </Card>
+</CardGroup>
+
+## How it works
+
+The fake news detector uses a machine learning pipeline that combines:
+
+1. **Data preparation** - Combines title and text fields, removes source metadata like "WASHINGTON (REUTERS) -" to prevent bias
+2. **NLP preprocessing** - Removes stopwords, punctuation, and applies tokenization
+3. **TF-IDF vectorization** - Converts cleaned text into numerical features using Term Frequency-Inverse Document Frequency
+4. **Logistic Regression** - Fast and interpretable classification model
+5. **Model persistence** - Saves trained model and vectorizer using joblib for deployment
+
+<Note>
+The model focuses on content analysis rather than source verification, making it capable of detecting fake news patterns regardless of publisher.
+</Note>
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Train the model and classify your first news article in minutes
+  </Card>
+  
+  <Card title="Installation" icon="download" href="/installation">
+    Set up your Python environment and install dependencies
+  </Card>
+  
+  <Card title="Training" icon="brain" href="/training/dataset-preparation">
+    Learn how the model is trained and optimized
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/predict">
+    Explore the prediction API and integration options
+  </Card>
+</CardGroup>
+
+## Architecture
+
+The project consists of three main components:
+
+- **fake_news_ia.py** - Training script that processes 44,000 articles, trains the model, and saves artifacts
+- **app.py** - Streamlit web application for interactive news classification
+- **predict_news.py** - Command-line interface for batch predictions
+
+All components use identical preprocessing functions to ensure consistency between training and inference.

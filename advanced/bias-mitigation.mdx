@@ -1,0 +1,154 @@
+---
+title: Bias Mitigation
+description: Learn how the fake news detector removes source-based metadata to ensure fair, content-based classification
+---
+
+## Overview
+
+One of the most critical aspects of building a fair fake news detector is preventing **source-based bias**. Without proper bias mitigation, the model could learn to associate certain news agencies or locations with "real" or "fake" labels, rather than analyzing the actual content.
+
+This page explains how the detector implements anti-bias preprocessing to ensure classification is based purely on content quality and writing patterns.
+
+## The Metadata Problem
+
+Many news articles begin with metadata that identifies the source:
+
+```
+WASHINGTON (REUTERS) - The Federal Reserve announced...
+NEW YORK (AP) - Stock markets rallied today...
+BRUSSELS (AFP) - European Union leaders agreed...
+```
+
+If this metadata is left in the training data, the model will learn shortcuts:
+- Articles mentioning "REUTERS", "AP", or "AFP" → classified as "real"
+- Articles without agency tags → potentially classified as "fake"
+
+**This is not true learning** - it's pattern matching based on source credibility, not content analysis.
+
+## Implementation: Regex-Based Metadata Removal
+
+The `limpiar_texto` function in `/home/daytona/workspace/source/fake_news_ia.py:54-69` implements metadata removal as the **first step** of text preprocessing:
+
+```python
+def limpiar_texto(texto):
+    # 1. ELIMINAR METADATA/FUENTE: Quita patrones como 'LUGAR (AGENCIA) - '
+    texto = re.sub(r'([A-Z\s]+)\s*\((REUTERS|AP|AFP)\)\s*\-\s*', '', str(texto), flags=re.IGNORECASE)
+    
+    # 2. Convertir a minúsculas
+    texto = str(texto).lower()
+    
+    # 3. Eliminar puntuación, números y caracteres especiales
+    texto = re.sub(r'[^a-z\s]', '', texto) 
+    
+    # 4. Tokenización con split() 
+    tokens = texto.split() 
+
+    # 5. Filtrar stopwords y tokens de una sola letra
+    tokens = [t for t in tokens if t not in stop_words and len(t) > 1]
+    return " ".join(tokens)
+```
+
+### The Critical Regex Pattern
+
+Let's break down the bias-removal regex (`fake_news_ia.py:56`):
+
+```python
+r'([A-Z\s]+)\s*\((REUTERS|AP|AFP)\)\s*\-\s*'
+```
+
+**Pattern Components:**
+
+| Component | Matches | Example |
+|-----------|---------|----------|
+| `([A-Z\s]+)` | One or more capital letters or spaces | `WASHINGTON`, `NEW YORK` |
+| `\s*` | Optional whitespace | Handles spacing variations |
+| `\((REUTERS|AP|AFP)\)` | News agency in parentheses | `(REUTERS)`, `(AP)`, `(AFP)` |
+| `\s*\-\s*` | Hyphen with optional surrounding spaces | ` - ` |
+
+**Input:**
+```
+WASHINGTON (REUTERS) - The Federal Reserve announced interest rates...
+```
+
+**Output:**
+```
+The Federal Reserve announced interest rates...
+```
+
+<Note>
+The `flags=re.IGNORECASE` parameter ensures that variations like `(Reuters)` or `(reuters)` are also caught and removed.
+</Note>
+
+## Why This Step Comes First
+
+Notice that metadata removal happens **before** any other preprocessing:
+
+1. **Remove metadata** ← Prevents source bias
+2. Convert to lowercase
+3. Remove punctuation/numbers
+4. Tokenize
+5. Remove stopwords
+
+If we removed metadata after lowercasing, the regex wouldn't match `(REUTERS)` anymore. The order matters!
+
+## Impact on Model Fairness
+
+By removing source metadata, the model must classify based on:
+
+- **Writing quality**: Grammar, coherence, structure
+- **Content patterns**: Sensationalism, conspiracy language, vague claims
+- **Semantic features**: Word choice, context, logical flow
+
+This produces a **content-based classifier** rather than a **source-based filter**.
+
+<Warning>
+If you modify the preprocessing pipeline, always ensure metadata removal happens first. Skipping this step will significantly reduce model fairness and generalization.
+</Warning>
+
+## Production Consistency
+
+The same `limpiar_texto` function is used in both training (`fake_news_ia.py:54`) and production (`app.py:24`). This ensures:
+
+- Consistent preprocessing between training and inference
+- No source-based shortcuts in real-world predictions
+- Fair classification regardless of article origin
+
+## Extending the Anti-Bias Filter
+
+You can extend the regex to catch additional metadata patterns:
+
+```python
+# Also remove dateline patterns like "LONDON, March 3 -"
+texto = re.sub(r'([A-Z\s]+),\s*\w+\s*\d+\s*\-\s*', '', texto)
+
+# Remove "By [Author Name]" bylines
+texto = re.sub(r'By\s+[A-Z][a-z]+\s+[A-Z][a-z]+', '', texto, flags=re.IGNORECASE)
+```
+
+<Tip>
+When adding new bias mitigation rules, test them on your training data first to ensure they don't accidentally remove legitimate content.
+</Tip>
+
+## Validation
+
+To verify bias mitigation is working:
+
+```python
+# Test the function
+test_text = "WASHINGTON (REUTERS) - The president announced today..."
+cleaned = limpiar_texto(test_text)
+print(cleaned)
+# Should NOT contain "WASHINGTON", "REUTERS", or the hyphen
+```
+
+## Key Takeaways
+
+- Source metadata creates unfair shortcuts for ML models
+- Regex-based removal ensures content-focused classification
+- Metadata removal must happen **first** in the preprocessing pipeline
+- The same preprocessing must be used in training and production
+- Fair models generalize better to new, unseen sources
+
+---
+
+Next: Learn how to save and load trained models with [Model Persistence](/advanced/model-persistence).

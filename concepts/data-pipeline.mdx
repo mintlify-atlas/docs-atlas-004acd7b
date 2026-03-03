@@ -1,0 +1,228 @@
+---
+title: Data Pipeline
+description: Deep dive into data loading, cleaning, and preparation processes that power the fake news detector
+---
+
+## Overview
+
+The data pipeline is the foundation of the fake news detector, responsible for ingesting, cleaning, and preparing approximately 44,000 news articles for model training. This stage ensures high-quality input data that directly impacts the model's 98.5% accuracy.
+
+## Data Sources
+
+The project uses the **Fake and Real News Dataset** from Kaggle, consisting of two CSV files:
+
+<CardGroup cols={2}>
+  <Card title="Fake.csv" icon="circle-xmark">
+    Contains fake news articles with title, text, subject, and date fields
+  </Card>
+  <Card title="True.csv" icon="circle-check">
+    Contains real news articles with the same structure
+  </Card>
+</CardGroup>
+
+## Pipeline Stages
+
+### 1. Dataset Loading
+
+The first step loads both CSV files and prepares them for combination:
+
+```python fake_news_ia.py
+print("--- 1. Carga de Datos ---")
+try:
+    # Load datasets, selecting 'title', 'text' and 'label'
+    fake = pd.read_csv("Fake.csv")
+    true = pd.read_csv("True.csv")
+    
+    # Add labels
+    fake["label"] = "fake"
+    true["label"] = "real"
+except FileNotFoundError:
+    print("Error: Make sure 'Fake.csv' and 'True.csv' are in the same folder.")
+    sys.exit()
+```
+
+<Warning>
+The script includes error handling for missing files. Ensure both CSV files are in the same directory as `fake_news_ia.py` before running.
+</Warning>
+
+### 2. Label Assignment
+
+Each dataset is assigned a binary label to enable supervised learning:
+
+- **Fake news** → `"fake"` label
+- **Real news** → `"real"` label
+
+This simple binary classification approach allows the Logistic Regression model to learn patterns distinguishing authentic from fabricated content.
+
+### 3. Dataset Combination
+
+Both datasets are merged into a single DataFrame, selecting only the necessary columns:
+
+```python fake_news_ia.py
+# Combine datasets (keeping only necessary columns)
+df = pd.concat(
+    [fake[['title', 'text', 'label']], 
+     true[['title', 'text', 'label']]], 
+    ignore_index=True
+)
+```
+
+<Info>
+Using `ignore_index=True` ensures the combined DataFrame has a continuous index from 0 to n-1, preventing index conflicts.
+</Info>
+
+### 4. Feature Engineering: Title + Text Combination
+
+<Note>
+This is the **KEY SOLUTION** that significantly boosts model accuracy.
+</Note>
+
+The pipeline combines the `title` and `text` fields into a single `full_text` column:
+
+```python fake_news_ia.py
+# *** KEY SOLUTION: Combine Title and Text for more context ***
+df['full_text'] = df['title'].astype(str) + ' ' + df['text'].astype(str)
+```
+
+**Why this matters:**
+
+- **Headlines contain crucial signals** - Fake news often uses sensationalist or clickbait titles
+- **Maximum semantic context** - The model sees both the hook (title) and the content (body)
+- **Pattern recognition** - Combining fields helps identify writing style inconsistencies
+
+### 5. Missing Value Handling
+
+The pipeline implements a two-step cleaning process:
+
+```python fake_news_ia.py
+# Check and clean null values
+print(f"Total news before null cleaning: {len(df)}")
+df.dropna(subset=['full_text', 'label'], inplace=True) 
+df.fillna('', inplace=True) 
+
+print(f"Total news after null cleaning: {len(df)}")
+print("Label distribution:")
+print(df['label'].value_counts())
+```
+
+**Cleaning strategy:**
+
+1. **Drop critical nulls** - Remove rows where `full_text` or `label` is missing (these cannot be used for training)
+2. **Fill remaining nulls** - Replace any other null values with empty strings to prevent errors
+
+### 6. Data Distribution Analysis
+
+After cleaning, the pipeline displays label distribution to check for class imbalance:
+
+```
+Label distribution:
+real    21417
+fake    23481
+Name: label, dtype: int64
+```
+
+The dataset is relatively balanced, which is ideal for binary classification without requiring special handling like SMOTE or class weights.
+
+## Train/Test Split
+
+After preprocessing, the data is split into training and testing sets:
+
+```python fake_news_ia.py
+# Split data (80% training, 20% testing)
+X_train, X_test, y_train, y_test = train_test_split(
+    X_tfidf, y, test_size=0.2, random_state=42
+)
+print(f"Training set size: {X_train.shape[0]} ({X_train.shape[1]} features)")
+print(f"Test set size: {X_test.shape[0]}")
+```
+
+**Split configuration:**
+
+- **80% training** - Approximately 35,200 articles for model learning
+- **20% testing** - Approximately 8,800 articles for unbiased evaluation
+- **random_state=42** - Ensures reproducible splits across runs
+
+<CardGroup cols={2}>
+  <Card title="Training Set" icon="book">
+    ~35,200 articles used to train the Logistic Regression model
+  </Card>
+  <Card title="Test Set" icon="vial">
+    ~8,800 articles held out for final performance evaluation
+  </Card>
+</CardGroup>
+
+## Data Quality Assurance
+
+The pipeline includes several quality checks:
+
+```python fake_news_ia.py
+print(df[["title", "text", "clean_text", "label"]].head())
+```
+
+This displays:
+- Original title
+- Original text
+- Cleaned text (after NLP preprocessing)
+- Assigned label
+
+Allowing visual inspection to verify preprocessing correctness.
+
+## Key Design Choices
+
+### Why Combine Title and Text?
+
+Fake news detection benefits from analyzing both components:
+
+| Component | Signals |
+|-----------|----------|
+| **Title** | Sensationalism, clickbait patterns, emotional manipulation |
+| **Text** | Factual inconsistencies, writing quality, source citations |
+| **Combined** | Coherence between headline and content |
+
+### Why 80/20 Split?
+
+<Accordion title="Reasoning behind the 80/20 split">
+The 80/20 split is a standard machine learning practice that:
+
+- **Maximizes training data** - More data for the model to learn patterns (80%)
+- **Ensures valid evaluation** - Sufficient test data for statistical significance (20%)
+- **Prevents overfitting** - Held-out test set detects if the model memorizes training data
+- **Industry standard** - Widely accepted for datasets of this size (44K samples)
+</Accordion>
+
+## Pipeline Output
+
+After completion, the data pipeline produces:
+
+1. **X_train** - TF-IDF vectorized training features (shape: ~35,200 × 5,000)
+2. **X_test** - TF-IDF vectorized test features (shape: ~8,800 × 5,000)
+3. **y_train** - Training labels ("fake" or "real")
+4. **y_test** - Test labels for evaluation
+
+## Error Handling
+
+The pipeline includes robust error handling:
+
+```python fake_news_ia.py
+try:
+    fake = pd.read_csv("Fake.csv")
+    true = pd.read_csv("True.csv")
+except FileNotFoundError:
+    print("Error: Make sure 'Fake.csv' and 'True.csv' are in the same folder.")
+    sys.exit()
+```
+
+<Warning>
+If datasets are missing, the script exits gracefully with a clear error message instead of crashing.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="NLP Preprocessing" href="/concepts/nlp-preprocessing" icon="text">
+    Learn how text is cleaned and prepared for vectorization
+  </Card>
+  <Card title="Model Training" href="/concepts/model-training" icon="brain">
+    Understand how the Logistic Regression model is trained
+  </Card>
+</CardGroup>

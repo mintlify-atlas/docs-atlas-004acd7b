@@ -1,0 +1,200 @@
+---
+title: Dataset Preparation
+description: Learn how to prepare and clean the dataset for training the fake news detection model
+---
+
+## Overview
+
+The fake news detector uses two Kaggle datasets containing labeled fake and real news articles. Proper dataset preparation is crucial for achieving the model's high accuracy (98.5%).
+
+## Dataset Sources
+
+The training data comes from two CSV files:
+
+<ParamField path="Fake.csv" type="CSV file">
+  Contains fake news articles from Kaggle's Fake News dataset
+</ParamField>
+
+<ParamField path="True.csv" type="CSV file">
+  Contains real news articles from Kaggle's Real News dataset
+</ParamField>
+
+### Required CSV Structure
+
+Each CSV file must contain the following fields:
+
+- `title` - The headline of the news article
+- `text` - The full body text of the article
+- Additional metadata fields (optional, not used in training)
+
+## Data Loading Process
+
+<Steps>
+  <Step title="Load Individual Datasets">
+    Load both fake and real news datasets using pandas:
+
+    ```python
+    import pandas as pd
+
+    fake = pd.read_csv("Fake.csv")
+    true = pd.read_csv("True.csv")
+    ```
+
+    Reference: `fake_news_ia.py:19-20`
+  </Step>
+
+  <Step title="Add Labels">
+    Add label columns to distinguish fake from real news:
+
+    ```python
+    fake["label"] = "fake"
+    true["label"] = "real"
+    ```
+
+    Reference: `fake_news_ia.py:23-24`
+  </Step>
+
+  <Step title="Concatenate Datasets">
+    Merge both datasets while keeping only necessary columns:
+
+    ```python
+    df = pd.concat(
+        [fake[['title', 'text', 'label']], 
+         true[['title', 'text', 'label']]], 
+        ignore_index=True
+    )
+    ```
+
+    Reference: `fake_news_ia.py:27`
+  </Step>
+</Steps>
+
+## Key Feature Engineering
+
+<Note>
+  **Critical Optimization**: Combining title and text significantly improves model accuracy by providing more contextual information.
+</Note>
+
+### Combining Title and Text
+
+The model concatenates the article title with its body text to create a richer feature set:
+
+```python
+df['full_text'] = df['title'].astype(str) + ' ' + df['text'].astype(str)
+```
+
+Reference: `fake_news_ia.py:30`
+
+This combination allows the model to learn from both the headline patterns (which often differ significantly between fake and real news) and the article content.
+
+## Data Cleaning
+
+<Steps>
+  <Step title="Remove Null Values">
+    Drop rows with missing values in critical columns:
+
+    ```python
+    df.dropna(subset=['full_text', 'label'], inplace=True)
+    ```
+
+    Reference: `fake_news_ia.py:34`
+  </Step>
+
+  <Step title="Fill Remaining Nulls">
+    Replace any remaining null values with empty strings:
+
+    ```python
+    df.fillna('', inplace=True)
+    ```
+
+    Reference: `fake_news_ia.py:35`
+  </Step>
+
+  <Step title="Verify Dataset">
+    Check the total count and label distribution:
+
+    ```python
+    print(f"Total de noticias después de limpieza de nulos: {len(df)}")
+    print(df['label'].value_counts())
+    ```
+
+    Reference: `fake_news_ia.py:37-39`
+  </Step>
+</Steps>
+
+## Text Preprocessing
+
+After loading, the text undergoes NLP preprocessing to improve model performance:
+
+### Cleaning Function
+
+The `limpiar_texto()` function performs the following operations:
+
+```python
+def limpiar_texto(texto):
+    # 1. Remove metadata/source patterns (e.g., WASHINGTON (REUTERS) - )
+    texto = re.sub(r'([A-Z\s]+)\s*\((REUTERS|AP|AFP)\)\s*\-\s*', '', str(texto), flags=re.IGNORECASE)
+    
+    # 2. Convert to lowercase
+    texto = str(texto).lower()
+    
+    # 3. Remove punctuation, numbers, and special characters
+    texto = re.sub(r'[^a-z\s]', '', texto)
+    
+    # 4. Tokenize with split()
+    tokens = texto.split()
+    
+    # 5. Filter stopwords and single-letter tokens
+    tokens = [t for t in tokens if t not in stop_words and len(t) > 1]
+    return " ".join(tokens)
+```
+
+Reference: `fake_news_ia.py:54-69`
+
+### Applying Cleaning
+
+Apply the cleaning function to the combined text:
+
+```python
+df["clean_text"] = df["full_text"].apply(limpiar_texto)
+```
+
+Reference: `fake_news_ia.py:72`
+
+<Warning>
+  Ensure NLTK stopwords are downloaded before running the preprocessing:
+  
+  ```bash
+  python3 -c 'import nltk; nltk.download("stopwords"); nltk.download("punkt")'
+  ```
+</Warning>
+
+## Dataset Statistics
+
+After preparation, the dataset typically contains:
+
+- **Total articles**: ~44,000 (after null removal)
+- **Train set**: 80% (~35,200 articles)
+- **Test set**: 20% (~8,800 articles)
+- **Label distribution**: Approximately balanced between fake and real
+
+## Error Handling
+
+<Warning>
+  The dataset preparation includes error handling for missing files:
+
+  ```python
+  try:
+      fake = pd.read_csv("Fake.csv")
+      true = pd.read_csv("True.csv")
+  except FileNotFoundError:
+      print("Error: Asegúrate de que los archivos 'Fake.csv' y 'True.csv' estén en la misma carpeta.")
+      sys.exit()
+  ```
+
+  Reference: `fake_news_ia.py:42-44`
+</Warning>
+
+## Next Steps
+
+After preparing the dataset, proceed to [Text Vectorization](/training/text-vectorization) to learn how the cleaned text is converted into numerical features.

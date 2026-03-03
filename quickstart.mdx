@@ -1,80 +1,159 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Train the model and classify your first news article in under 5 minutes
 ---
 
-## Get started in three steps
+This guide will help you train the fake news detector and classify your first article. You'll train a model on 44,000 news articles and achieve 98.5% accuracy.
 
-Get your documentation site running locally and make your first customization.
+<Note>
+Before starting, make sure you have completed the [installation](/installation) steps and have the required CSV files (`Fake.csv` and `True.csv`) in your project directory.
+</Note>
 
-### Step 1: Set up your local environment
+## Train the model
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+<Steps>
+  <Step title="Download NLTK data">
+    The model requires NLTK stopwords and tokenizers. Download them first:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    python3 -c 'import nltk; nltk.download("stopwords"); nltk.download("punkt")'
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    This downloads English stopwords used for text preprocessing.
+  </Step>
+  
+  <Step title="Run the training script">
+    Execute the training script to process the dataset and train the model:
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    python3 fake_news_ia.py
+    ```
+    
+    The script will:
+    - Load approximately 44,000 articles from `Fake.csv` and `True.csv`
+    - Clean and preprocess the text using NLP techniques
+    - Train a Logistic Regression model with TF-IDF vectorization
+    - Save the model to `modelo_fake_news.pkl`
+    - Save the vectorizer to `vectorizer_tfidf.pkl`
+    
+    <Tip>
+    Training takes approximately 1-2 minutes on modern hardware. You'll see progress messages for each step.
+    </Tip>
+  </Step>
+  
+  <Step title="Review the results">
+    The script outputs model performance metrics:
+    
+    ```bash
+    Accuracy (Precisión General): 0.985
+    
+    Reporte de Clasificación:
+                  precision    recall  f1-score   support
+    
+            fake       0.99      0.98      0.98      4519
+            real       0.98      0.99      0.98      4469
+    ```
+    
+    You should see approximately 98.5% accuracy on the test set.
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Classify your first article
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Once training is complete, you can classify news articles using either the web interface or command line.
 
-### Step 3: Go live
+### Option 1: Use the Streamlit web app
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+<Steps>
+  <Step title="Launch the app">
+    Start the Streamlit web server:
+    
+    ```bash
+    streamlit run app.py
+    ```
+    
+    The app will open in your browser at `http://localhost:8501`.
+  </Step>
+  
+  <Step title="Paste a news article">
+    Copy and paste a news article into the text area. Try this example:
+    
+    ```text
+    The Federal Reserve announced on Wednesday that it will maintain 
+    the benchmark interest rate within the current range of 5.25% to 
+    5.50%, citing steady economic growth and easing inflation. Federal 
+    Reserve Chair Jerome Powell stated during a press briefing in 
+    Washington that future rate decisions will depend on labor market 
+    data and inflation trends over the coming months.
+    ```
+  </Step>
+  
+  <Step title="Get the prediction">
+    Click the "Clasificar Noticia" button. The model will:
+    
+    1. Clean and preprocess the text
+    2. Transform it using the trained TF-IDF vectorizer
+    3. Make a prediction using the Logistic Regression model
+    
+    You'll see either:
+    - ✅ **REAL** - with a success message and balloons animation
+    - ❌ **FAKE** - with an error message
+  </Step>
+</Steps>
+
+### Option 2: Use the command-line script
+
+For batch predictions, use the `predict_news.py` script:
+
+```bash
+python3 predict_news.py
+```
+
+This script includes several pre-configured test cases and outputs predictions for each:
+
+```bash
+Noticia 1 (Inicio): The Federal Reserve announced on Wednesday that it...
+Predicción: REAL
+
+Noticia 2 (Inicio): A secret meeting was held at the UN headquarters wh...
+Predicción: FAKE
+
+Noticia 3 (Inicio): President Joe Biden announced a new infrastructure...
+Predicción: REAL
+```
+
+## Test with different examples
+
+Try classifying these different types of content:
+
+<CodeGroup>
+```text Real news example
+The European Union formally approved a new trade agreement with Canada 
+on Thursday following a vote in the European Parliament in Brussels. 
+Officials said the agreement is expected to strengthen economic 
+cooperation and reduce tariffs on industrial goods over the next five years.
+```
+
+```text Fake news example
+A secret meeting was held at the UN headquarters where delegates voted 
+to replace all sugary drinks with green juice to boost the global 
+population by 500 years.
+```
+
+```text Scientific news example
+For the first time, scientists are tracking the migration of monarch 
+butterflies across much of North America, actively monitoring individual 
+insects on journeys from as far away as Ontario all the way to their 
+overwintering colonies in central Mexico.
+```
+</CodeGroup>
+
+<Warning>
+The model works best with news-style articles. Short statements or social media posts may not produce accurate results.
+</Warning>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+- Learn about the [training process](/training/dataset-preparation) and how to customize the model
+- Explore [integration options](/api/predict) for using the model in your applications
+- Understand the [NLP preprocessing](/concepts/nlp-preprocessing) pipeline in detail

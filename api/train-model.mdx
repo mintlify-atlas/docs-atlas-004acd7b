@@ -1,0 +1,192 @@
+---
+title: 'Model Training Workflow'
+description: 'Complete training pipeline for the fake news detection model including data loading, preprocessing, vectorization, and model persistence'
+---
+
+## Overview
+
+The training workflow implements a complete machine learning pipeline that processes raw CSV datasets, applies NLP preprocessing, trains a Logistic Regression classifier, and saves the trained artifacts for production use. The final model achieves **98.5% accuracy** on the test set.
+
+## Training Pipeline Steps
+
+### 1. Data Loading and Preparation
+
+```python fake_news_ia.py:19-40
+# Load separate datasets for fake and real news
+fake = pd.read_csv("Fake.csv")
+true = pd.read_csv("True.csv")
+
+# Add binary labels
+fake["label"] = "fake"
+true["label"] = "real"
+
+# Combine datasets
+df = pd.concat([fake[['title', 'text', 'label']], 
+                true[['title', 'text', 'label']]], 
+                ignore_index=True)
+
+# KEY IMPROVEMENT: Combine title and text for richer context
+df['full_text'] = df['title'].astype(str) + ' ' + df['text'].astype(str)
+
+# Clean null values
+df.dropna(subset=['full_text', 'label'], inplace=True) 
+df.fillna('', inplace=True)
+```
+
+<Info>
+  **Dataset Structure**: Expects two CSV files (`Fake.csv` and `True.csv`) with columns: `title`, `text`. The workflow automatically adds the `label` column.
+</Info>
+
+### 2. Text Preprocessing
+
+```python fake_news_ia.py:49-72
+from nltk.corpus import stopwords
+
+stop_words = set(stopwords.words("english"))
+
+# Apply limpiar_texto function to combined title + text
+df["clean_text"] = df["full_text"].apply(limpiar_texto)
+```
+
+Applies the 5-step [limpiar_texto](/api/limpiar-texto) cleaning pipeline to create the `clean_text` column used for training.
+
+### 3. Vectorization and Data Splitting
+
+```python fake_news_ia.py:78-91
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import train_test_split
+
+X = df["clean_text"]
+y = df["label"]
+
+# Vectorize with optimized TF-IDF parameters
+vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+X_tfidf = vectorizer.fit_transform(X)
+
+# 80/20 train-test split with fixed random seed
+X_train, X_test, y_train, y_test = train_test_split(
+    X_tfidf, y, test_size=0.2, random_state=42
+)
+```
+
+<ParamField path="max_features" type="int" default="5000">
+  Limits vocabulary to top 5000 most important features for efficiency and generalization
+</ParamField>
+
+<ParamField path="ngram_range" type="tuple" default="(1, 2)">
+  Captures both unigrams (single words) and bigrams (word pairs) for richer feature representation
+</ParamField>
+
+<ParamField path="test_size" type="float" default="0.2">
+  Reserves 20% of data for testing model performance
+</ParamField>
+
+<ParamField path="random_state" type="int" default="42">
+  Fixed seed ensures reproducible train/test splits
+</ParamField>
+
+### 4. Model Training
+
+```python fake_news_ia.py:95-97
+from sklearn.linear_model import LogisticRegression
+
+modelo = LogisticRegression(max_iter=1000, solver='liblinear', random_state=42)
+modelo.fit(X_train, y_train)
+```
+
+Trains a Logistic Regression classifier with optimized hyperparameters. See [LogisticRegression Configuration](/api/logistic-regression) for parameter details.
+
+### 5. Model Persistence
+
+```python fake_news_ia.py:100-102
+import joblib
+
+joblib.dump(modelo, 'modelo_fake_news.pkl')
+joblib.dump(vectorizer, 'vectorizer_tfidf.pkl')
+```
+
+<Warning>
+  **Both artifacts must be saved**: The trained model AND the fitted vectorizer are required for prediction. The vectorizer's vocabulary must match the training data.
+</Warning>
+
+**Saved Files:**
+- `modelo_fake_news.pkl` - Trained LogisticRegression classifier
+- `vectorizer_tfidf.pkl` - Fitted TfidfVectorizer with learned vocabulary
+
+### 6. Model Evaluation
+
+```python fake_news_ia.py:107-110
+from sklearn.metrics import accuracy_score, classification_report
+
+y_pred = modelo.predict(X_test)
+
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print(classification_report(y_test, y_pred))
+```
+
+**Expected Performance:**
+- Overall Accuracy: ~98.5%
+- High precision and recall for both "fake" and "real" classes
+
+## Complete Training Script
+
+The full training workflow is implemented in `fake_news_ia.py`. To execute:
+
+```bash
+# Ensure NLTK dependencies are installed
+python3 -c 'import nltk; nltk.download("stopwords")'
+
+# Run training script
+python fake_news_ia.py
+```
+
+## Required Dependencies
+
+```python
+import pandas as pd
+import nltk
+from nltk.corpus import stopwords
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, classification_report
+import re
+import joblib
+```
+
+## Output Artifacts
+
+<ResponseField name="modelo_fake_news.pkl" type="file">
+  Serialized LogisticRegression model trained on 80% of the dataset. Contains learned feature weights for fake/real classification.
+</ResponseField>
+
+<ResponseField name="vectorizer_tfidf.pkl" type="file">
+  Serialized TfidfVectorizer with fitted vocabulary (5000 features) and IDF weights. Required for transforming new text inputs.
+</ResponseField>
+
+## Key Design Decisions
+
+### Title + Text Concatenation
+```python
+df['full_text'] = df['title'].astype(str) + ' ' + df['text'].astype(str)
+```
+Combining the article title with body text provides richer semantic context and improves classification accuracy.
+
+### Bi-gram Features
+```python
+ngram_range=(1, 2)
+```
+Capturing word pairs (e.g., "federal reserve", "climate change") helps the model learn multi-word phrases that are strong indicators of real or fake news.
+
+### Feature Limit
+```python
+max_features=5000
+```
+Balances model expressiveness with computational efficiency. Prevents overfitting while capturing the most discriminative vocabulary.
+
+## See Also
+
+- [limpiar_texto Function](/api/limpiar-texto) - Text preprocessing implementation
+- [TfidfVectorizer Configuration](/api/tfidf-vectorizer) - Vectorization details
+- [LogisticRegression Configuration](/api/logistic-regression) - Model hyperparameters
+- [Prediction Function](/api/predict) - Using trained models for inference

@@ -1,0 +1,406 @@
+---
+title: Custom Features
+description: Extend the fake news detector with custom preprocessing, feature engineering, and alternative classifiers
+---
+
+## Overview
+
+While the baseline model achieves 98.5% accuracy, you may want to customize the system for:
+
+- Different types of content (social media posts, blog articles, etc.)
+- Domain-specific fake news detection (health, finance, politics)
+- Experimentation with new features and techniques
+- Performance optimization for your specific use case
+
+This guide shows you how to extend and customize the fake news detector.
+
+## Customizing Text Preprocessing
+
+The `limpiar_texto` function (`fake_news_ia.py:54-69`) is the foundation of the pipeline. Here's how to extend it:
+
+### Current Preprocessing Pipeline
+
+```python
+def limpiar_texto(texto):
+    # 1. Remove metadata
+    texto = re.sub(r'([A-Z\s]+)\s*\((REUTERS|AP|AFP)\)\s*\-\s*', '', str(texto), flags=re.IGNORECASE)
+    
+    # 2. Lowercase
+    texto = str(texto).lower()
+    
+    # 3. Remove punctuation and numbers
+    texto = re.sub(r'[^a-z\s]', '', texto) 
+    
+    # 4. Tokenize
+    tokens = texto.split() 
+
+    # 5. Remove stopwords and short tokens
+    tokens = [t for t in tokens if t not in stop_words and len(t) > 1]
+    return " ".join(tokens)
+```
+
+### Extension 1: Preserve Capitalization Patterns
+
+Fake news often has unusual capitalization ("BREAKING NEWS!!!", "SHOCKING Discovery"):
+
+```python
+def limpiar_texto_extended(texto):
+    # NEW: Count capitalization before lowercasing
+    all_caps_words = len(re.findall(r'\b[A-Z]{2,}\b', texto))
+    
+    # 1. Remove metadata
+    texto = re.sub(r'([A-Z\s]+)\s*\((REUTERS|AP|AFP)\)\s*\-\s*', '', str(texto), flags=re.IGNORECASE)
+    
+    # 2. Lowercase
+    texto = str(texto).lower()
+    
+    # Add capitalization marker if excessive
+    if all_caps_words > 3:
+        texto = "CAPSMARKER " + texto
+    
+    # ... rest of pipeline
+    texto = re.sub(r'[^a-z\s]', '', texto)
+    tokens = texto.split()
+    tokens = [t for t in tokens if t not in stop_words and len(t) > 1]
+    return " ".join(tokens)
+```
+
+This adds a special token when articles have excessive capitalization.
+
+### Extension 2: Preserve Exclamation Marks
+
+Fake news often uses sensational punctuation:
+
+```python
+def limpiar_texto_with_emphasis(texto):
+    # Count exclamation marks before removing punctuation
+    exclamation_count = texto.count('!')
+    
+    # Standard preprocessing
+    texto = re.sub(r'([A-Z\s]+)\s*\((REUTERS|AP|AFP)\)\s*\-\s*', '', str(texto), flags=re.IGNORECASE)
+    texto = str(texto).lower()
+    
+    # Add emphasis marker
+    if exclamation_count > 2:
+        texto = "emphasismarker " + texto
+    
+    texto = re.sub(r'[^a-z\s]', '', texto)
+    tokens = texto.split()
+    tokens = [t for t in tokens if t not in stop_words and len(t) > 1]
+    return " ".join(tokens)
+```
+
+### Extension 3: Add Stemming or Lemmatization
+
+Reduce words to their root forms:
+
+```python
+from nltk.stem import PorterStemmer
+
+stemmer = PorterStemmer()
+
+def limpiar_texto_stemmed(texto):
+    texto = re.sub(r'([A-Z\s]+)\s*\((REUTERS|AP|AFP)\)\s*\-\s*', '', str(texto), flags=re.IGNORECASE)
+    texto = str(texto).lower()
+    texto = re.sub(r'[^a-z\s]', '', texto)
+    tokens = texto.split()
+    
+    # Remove stopwords
+    tokens = [t for t in tokens if t not in stop_words and len(t) > 1]
+    
+    # NEW: Apply stemming
+    tokens = [stemmer.stem(t) for t in tokens]
+    
+    return " ".join(tokens)
+```
+
+<Note>
+Stemming can reduce vocabulary size and may improve performance, but test on your specific dataset - sometimes it reduces accuracy by removing meaningful distinctions.
+</Note>
+
+## Customizing TF-IDF Vectorization
+
+The vectorizer (`fake_news_ia.py:82`) has several tunable parameters:
+
+```python
+vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+```
+
+### Experiment with N-gram Range
+
+N-grams capture multi-word phrases:
+
+| Configuration | Captures | Example Features |
+|---------------|----------|------------------|
+| `ngram_range=(1, 1)` | Single words only | "president", "announced", "policy" |
+| `ngram_range=(1, 2)` | **Current: Words + bi-grams** | "president", "president announced" |
+| `ngram_range=(1, 3)` | Words + bi-grams + tri-grams | "president announced policy" |
+| `ngram_range=(2, 2)` | Only bi-grams | "president announced", "new policy" |
+
+**Try tri-grams:**
+
+```python
+vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 3))
+```
+
+<Warning>
+Larger n-gram ranges increase feature dimensionality and training time. Start with (1, 2) and only increase if you have sufficient training data (50k+ examples).
+</Warning>
+
+### Adjust Maximum Features
+
+The `max_features=5000` parameter limits vocabulary size:
+
+```python
+# Smaller vocabulary (faster, less memory, may reduce accuracy)
+vectorizer = TfidfVectorizer(max_features=3000, ngram_range=(1, 2))
+
+# Larger vocabulary (slower, more memory, may improve accuracy)
+vectorizer = TfidfVectorizer(max_features=10000, ngram_range=(1, 2))
+
+# No limit (use entire vocabulary - not recommended for large datasets)
+vectorizer = TfidfVectorizer(ngram_range=(1, 2))
+```
+
+**Impact on the model:**
+
+- **More features**: Model can capture more nuanced patterns, but risks overfitting
+- **Fewer features**: Faster training, lower memory, but may miss subtle signals
+
+<Tip>
+The current 5,000 features is a well-tested balance. Only change if you have a specific reason (e.g., limited memory, specialized domain with small vocabulary).
+</Tip>
+
+### Add Min/Max Document Frequency
+
+Filter out very rare or very common terms:
+
+```python
+vectorizer = TfidfVectorizer(
+    max_features=5000,
+    ngram_range=(1, 2),
+    min_df=2,      # Ignore terms appearing in fewer than 2 documents
+    max_df=0.95    # Ignore terms appearing in more than 95% of documents
+)
+```
+
+This can improve robustness by removing noise.
+
+## Alternative Classifiers
+
+The current model uses Logistic Regression (`fake_news_ia.py:95`):
+
+```python
+modelo = LogisticRegression(max_iter=1000, solver='liblinear', random_state=42)
+```
+
+### Why Logistic Regression Works Well
+
+- **Fast training**: Trains in seconds even on 40k+ articles
+- **Interpretable**: Feature weights show which words indicate fake/real
+- **Low memory**: Small model size (~5MB for 5,000 features)
+- **Excellent baseline**: Often achieves 95%+ accuracy on text classification
+- **No overfitting risk**: Linear models generalize well with TF-IDF features
+
+### Experiment with Other Classifiers
+
+#### 1. Random Forest
+
+Can capture non-linear patterns:
+
+```python
+from sklearn.ensemble import RandomForestClassifier
+
+modelo = RandomForestClassifier(
+    n_estimators=100,
+    max_depth=50,
+    random_state=42,
+    n_jobs=-1  # Use all CPU cores
+)
+modelo.fit(X_train, y_train)
+```
+
+**Pros:** May improve accuracy by 0.5-1%
+**Cons:** Slower training, larger model size, less interpretable
+
+#### 2. Naive Bayes
+
+Very fast, works well with text:
+
+```python
+from sklearn.naive_bayes import MultinomialNB
+
+modelo = MultinomialNB(alpha=1.0)
+modelo.fit(X_train, y_train)
+```
+
+**Pros:** Extremely fast training, small model
+**Cons:** Usually 1-2% lower accuracy than Logistic Regression
+
+#### 3. Support Vector Machine (SVM)
+
+Powerful for high-dimensional text data:
+
+```python
+from sklearn.svm import LinearSVC
+
+modelo = LinearSVC(max_iter=1000, random_state=42)
+modelo.fit(X_train, y_train)
+```
+
+**Pros:** Often matches Logistic Regression accuracy
+**Cons:** Slower training on large datasets
+
+#### 4. Gradient Boosting (XGBoost)
+
+State-of-the-art ensemble method:
+
+```python
+import xgboost as xgb
+
+modelo = xgb.XGBClassifier(
+    n_estimators=100,
+    max_depth=6,
+    learning_rate=0.1,
+    random_state=42
+)
+modelo.fit(X_train, y_train)
+```
+
+**Pros:** May achieve highest accuracy
+**Cons:** Requires additional installation, slower, larger model
+
+<Tip>
+For this dataset, Logistic Regression already achieves 98.5% accuracy. Only switch classifiers if you have a specific need (e.g., need to squeeze out an extra 0.5% accuracy) or are experimenting for learning purposes.
+</Tip>
+
+## Hyperparameter Tuning
+
+Optimize the Logistic Regression parameters:
+
+```python
+from sklearn.model_selection import GridSearchCV
+
+# Define parameter grid
+param_grid = {
+    'C': [0.1, 1.0, 10.0],           # Regularization strength
+    'solver': ['liblinear', 'lbfgs'],
+    'max_iter': [500, 1000, 1500]
+}
+
+# Grid search with cross-validation
+grid_search = GridSearchCV(
+    LogisticRegression(random_state=42),
+    param_grid,
+    cv=5,
+    scoring='accuracy',
+    n_jobs=-1
+)
+
+grid_search.fit(X_train, y_train)
+print("Best parameters:", grid_search.best_params_)
+print("Best CV accuracy:", grid_search.best_score_)
+
+# Use best model
+modelo = grid_search.best_estimator_
+```
+
+## Adding Custom Features
+
+Combine TF-IDF with hand-crafted features:
+
+```python
+import numpy as np
+from scipy.sparse import hstack
+
+def extract_custom_features(texts):
+    """Extract readability and style features"""
+    features = []
+    
+    for text in texts:
+        # Average word length
+        words = text.split()
+        avg_word_len = np.mean([len(w) for w in words]) if words else 0
+        
+        # Sentence count (approximate)
+        sentence_count = text.count('.') + text.count('!') + text.count('?')
+        
+        # Exclamation mark ratio
+        exclamation_ratio = text.count('!') / max(len(text), 1)
+        
+        features.append([avg_word_len, sentence_count, exclamation_ratio])
+    
+    return np.array(features)
+
+# Get TF-IDF features
+X_tfidf = vectorizer.fit_transform(df["clean_text"])
+
+# Get custom features
+X_custom = extract_custom_features(df["full_text"])
+
+# Combine both
+X_combined = hstack([X_tfidf, X_custom])
+
+# Train on combined features
+X_train, X_test, y_train, y_test = train_test_split(
+    X_combined, df["label"], test_size=0.2, random_state=42
+)
+
+modelo.fit(X_train, y_train)
+```
+
+<Warning>
+If you add custom features, you must compute the same features in production and ensure they're in the correct order when combining with TF-IDF vectors.
+</Warning>
+
+## Testing Your Changes
+
+Always validate modifications:
+
+```python
+# After training your modified model
+y_pred = modelo.predict(X_test)
+
+from sklearn.metrics import accuracy_score, classification_report
+
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
+
+# Test on specific examples
+test_news = [
+    "BREAKING: Secret government plot revealed!!!",
+    "The Federal Reserve announced interest rates will remain steady."
+]
+
+test_clean = [limpiar_texto(n) for n in test_news]
+test_vec = vectorizer.transform(test_clean)
+predictions = modelo.predict(test_vec)
+
+for news, pred in zip(test_news, predictions):
+    print(f"\n{news[:60]}...")
+    print(f"Predicted: {pred}")
+```
+
+## Deployment Considerations
+
+When deploying custom models:
+
+1. **Save all components**: If you add custom features, save the feature extractor too
+2. **Document changes**: Keep a changelog of modifications
+3. **Version control**: Use git to track changes to preprocessing and model code
+4. **A/B testing**: Run the new model alongside the baseline and compare performance
+5. **Monitor performance**: Track accuracy on real-world data over time
+
+## Key Takeaways
+
+- The preprocessing function is highly extensible for domain-specific needs
+- TF-IDF parameters (n-grams, max_features) significantly impact performance
+- Logistic Regression is an excellent baseline - only change if you have a specific reason
+- Always validate changes on a held-out test set
+- Custom features can boost performance but add complexity
+- Document and version all customizations
+
+---
+
+Ready to contribute? Visit the [GitHub repository](https://github.com/MisaelCast/Proyecto-IA) to submit your improvements to the project.

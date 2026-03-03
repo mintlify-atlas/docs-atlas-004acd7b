@@ -1,0 +1,176 @@
+---
+title: System Architecture
+description: Comprehensive overview of the fake news detector's architecture, pipeline, and component interactions
+---
+
+## Overview
+
+The Fake News Detector is built on a classic machine learning pipeline architecture that achieves 98.5% accuracy using Natural Language Processing (NLP) and Logistic Regression. The system processes approximately 44,000 news articles from Kaggle's Fake and Real News dataset.
+
+## Architecture Pipeline
+
+The system follows a six-stage pipeline from data ingestion to inference:
+
+<Steps>
+  <Step title="Data Loading">
+    Load and combine datasets from `Fake.csv` and `True.csv`
+  </Step>
+  <Step title="Data Cleaning & Preparation">
+    Merge title and text fields, handle missing values, assign labels
+  </Step>
+  <Step title="NLP Preprocessing">
+    Clean text by removing metadata, stopwords, and special characters
+  </Step>
+  <Step title="Vectorization">
+    Convert cleaned text to numerical features using TF-IDF
+  </Step>
+  <Step title="Model Training">
+    Train Logistic Regression classifier and evaluate performance
+  </Step>
+  <Step title="Persistence & Inference">
+    Save model artifacts and enable real-time prediction
+  </Step>
+</Steps>
+
+## System Components
+
+### Training Pipeline (`fake_news_ia.py`)
+
+The training script orchestrates the complete machine learning workflow:
+
+```python fake_news_ia.py
+# Load datasets
+fake = pd.read_csv("Fake.csv")
+true = pd.read_csv("True.csv")
+
+# Assign labels
+fake["label"] = "fake"
+true["label"] = "real"
+
+# Combine datasets
+df = pd.concat([fake[['title', 'text', 'label']], 
+                true[['title', 'text', 'label']]], ignore_index=True)
+
+# KEY: Combine title and text for maximum context
+df['full_text'] = df['title'].astype(str) + ' ' + df['text'].astype(str)
+```
+
+### Inference Application (`app.py`)
+
+The Streamlit web application provides a user-friendly interface for real-time classification:
+
+```python app.py
+# Load pre-trained artifacts
+modelo = joblib.load('modelo_fake_news.pkl')
+vectorizer = joblib.load('vectorizer_tfidf.pkl')
+
+# Process user input
+noticia_limpia = limpiar_texto(noticia_input)
+noticia_vec = vectorizer.transform([noticia_limpia])
+prediccion = modelo.predict(noticia_vec)[0]
+```
+
+## Key Design Decisions
+
+<CardGroup cols={2}>
+  <Card title="Title + Text Combination" icon="merge">
+    Combining title and text fields provides maximum semantic context, improving model accuracy by capturing both headline patterns and article content.
+  </Card>
+  <Card title="Metadata Removal" icon="filter">
+    Removing source metadata (e.g., "WASHINGTON (REUTERS) -") prevents the model from learning source bias, forcing it to focus on content quality.
+  </Card>
+  <Card title="TF-IDF Vectorization" icon="calculator">
+    TF-IDF with bi-grams (1,2) and 5,000 features balances performance and dimensionality, capturing key phrases while remaining computationally efficient.
+  </Card>
+  <Card title="Model Persistence" icon="floppy-disk">
+    Saving both the model and vectorizer with joblib ensures consistent preprocessing and prediction in production.
+  </Card>
+</CardGroup>
+
+## Data Flow Diagram
+
+Here's how data flows through the system:
+
+```
+┌─────────────────┐
+│  Fake.csv       │
+│  True.csv       │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Data Loading   │ ──► Combine datasets, add labels
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Preprocessing  │ ──► Clean text, remove stopwords
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Vectorization  │ ──► TF-IDF (5000 features, bi-grams)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Train/Test     │ ──► 80/20 split
+│  Split          │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Model Training │ ──► Logistic Regression
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Persistence    │ ──► Save .pkl files
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Inference API  │ ──► Streamlit App
+└─────────────────┘
+```
+
+## Performance Metrics
+
+The system achieves exceptional performance on the test set:
+
+<Note>
+**Accuracy: 98.5%** - The model correctly classifies approximately 98.5 out of every 100 news articles as real or fake.
+</Note>
+
+This high accuracy is achieved through:
+
+1. **Quality training data** - 44,000 labeled articles
+2. **Effective feature engineering** - Title + text combination
+3. **Robust preprocessing** - Metadata removal and stopword filtering
+4. **Optimized vectorization** - TF-IDF with bi-grams
+5. **Appropriate algorithm** - Logistic Regression for binary text classification
+
+## Technology Stack
+
+| Component | Technology | Purpose |
+|-----------|-----------|----------|
+| **Data Processing** | Pandas | Dataset manipulation and cleaning |
+| **NLP** | NLTK | Stopwords, tokenization |
+| **Vectorization** | scikit-learn (TF-IDF) | Text-to-numerical conversion |
+| **Model** | scikit-learn (LogisticRegression) | Binary classification |
+| **Persistence** | joblib | Model serialization |
+| **Web Interface** | Streamlit | User-facing application |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Data Pipeline" href="/concepts/data-pipeline" icon="database">
+    Learn about data loading, cleaning, and preparation
+  </Card>
+  <Card title="NLP Preprocessing" href="/concepts/nlp-preprocessing" icon="text">
+    Explore text cleaning and preprocessing techniques
+  </Card>
+  <Card title="Model Training" href="/concepts/model-training" icon="brain">
+    Understand the training process and evaluation
+  </Card>
+</CardGroup>
