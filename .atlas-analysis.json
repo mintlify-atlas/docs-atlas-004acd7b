@@ -1,0 +1,99 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "Fake News Detector",
+  "projectDescription": "AI-powered fake news detector using NLP and Logistic Regression with 98.5% accuracy.",
+  "theme": "aspen",
+  "primaryColor": "#E74C3C",
+  "lightColor": "#EC7063",
+  "darkColor": "#C0392B",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/data-pipeline",
+              "concepts/nlp-preprocessing",
+              "concepts/model-training"
+            ]
+          },
+          {
+            "group": "Training Guide",
+            "pages": [
+              "training/dataset-preparation",
+              "training/text-vectorization",
+              "training/model-configuration",
+              "training/evaluation-metrics"
+            ]
+          },
+          {
+            "group": "Inference",
+            "pages": [
+              "inference/prediction-api",
+              "inference/streamlit-app",
+              "inference/batch-processing"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/bias-mitigation",
+              "advanced/model-persistence",
+              "advanced/custom-features"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Functions",
+            "pages": [
+              "api/limpiar-texto",
+              "api/train-model",
+              "api/predict"
+            ]
+          },
+          {
+            "group": "Models",
+            "pages": [
+              "api/logistic-regression",
+              "api/tfidf-vectorizer"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "98.5% accuracy fake news detection",
+    "TF-IDF text vectorization with bi-grams",
+    "NLP-based text preprocessing and cleaning",
+    "Bias mitigation through metadata removal",
+    "Interactive Streamlit web interface",
+    "Model persistence with joblib",
+    "Logistic Regression classifier",
+    "English stopwords filtering"
+  ],
+  "publicApiSurface": [
+    "limpiar_texto(texto)",
+    "modelo.predict(X)",
+    "vectorizer.transform(texts)",
+    "TfidfVectorizer(max_features=5000, ngram_range=(1, 2))",
+    "LogisticRegression(max_iter=1000, solver='liblinear')",
+    "joblib.load('modelo_fake_news.pkl')",
+    "joblib.load('vectorizer_tfidf.pkl')"
+  ]
+}
