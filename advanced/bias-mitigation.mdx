@@ -13,7 +13,7 @@ This page explains how the detector implements anti-bias preprocessing to ensure
 
 Many news articles begin with metadata that identifies the source:
 
-```
+```text
 WASHINGTON (REUTERS) - The Federal Reserve announced...
 NEW YORK (AP) - Stock markets rallied today...
 BRUSSELS (AFP) - European Union leaders agreed...
@@ -66,12 +66,12 @@ r'([A-Z\s]+)\s*\((REUTERS|AP|AFP)\)\s*\-\s*'
 | `\s*\-\s*` | Hyphen with optional surrounding spaces | ` - ` |
 
 **Input:**
-```
+```text
 WASHINGTON (REUTERS) - The Federal Reserve announced interest rates...
 ```
 
 **Output:**
-```
+```text
 The Federal Reserve announced interest rates...
 ```
 
